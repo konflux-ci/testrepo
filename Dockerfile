@@ -1,1 +1,1 @@
-FROM registry.redhat.io/ubi9/ubi:latest
+FROM registry.fedoraproject.org/fedora:latest
