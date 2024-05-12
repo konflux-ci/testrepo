@@ -1,3 +1,5 @@
-FROM registry.fedoraproject.org/fedora:latest
+FROM registry.access.redhat.com/ubi8/ubi:latest
 
-RUN python3 -c 'import random; import sys; sys.exit(random.randint(0, 1))'
+COPY entrypoint.sh /
+
+ENTRYPOINT ["/entrypoint.sh"]
