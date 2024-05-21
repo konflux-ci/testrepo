@@ -1,0 +1,104 @@
+apiVersion: tekton.dev/v1
+kind: PipelineRun
+metadata:
+  annotations:
+    build.appstudio.redhat.com/commit_sha: main
+    build.appstudio.redhat.com/target_branch: main
+    pipelinesascode.tekton.dev/max-keep-runs: "3"
+  labels:
+    appstudio.openshift.io/application: test-component
+    appstudio.openshift.io/component: test-component
+    pipelines.appstudio.openshift.io/type: configuration
+  generateName: test-component-on-{{event_type}}-
+  namespace: user-ns2
+spec:
+  params:
+  - name: git-url
+    value: '{{source_url}}'
+  - name: revision
+    value: '{{revision}}'
+  - name: resources-dir
+    value: .tekton/resources
+  pipelineSpec:
+    params:
+    - description: Source Repository URL
+      name: git-url
+      type: string
+    - default: ""
+      description: Revision of the Source Repository
+      name: revision
+      type: string
+    tasks:
+    - name: clone-repository
+      params:
+      - name: url
+        value: $(params.git-url)
+      - name: revision
+        value: $(params.revision)
+      - name: subdirectory
+        value: source
+      taskRef:
+        params:
+        - name: name
+          value: git-clone
+        - name: version
+          value: "0.9"
+        - name: kind
+          value: task
+        resolver: hub
+      workspaces:
+      - name: output
+        workspace: workspace
+      - name: basic-auth
+        workspace: git-auth
+    - name: apply-resources
+      params:
+      - name: resources-dir
+        value: $(params.resources-dir)
+      - name: event-type
+        value: '{{event_type}}'
+      workspaces:
+        - name: workdir
+          workspace: workspace
+          subPath: source
+      taskSpec:
+        params:
+          - name: resources-dir
+            type: string
+        workspaces:
+          - name: workdir
+            mountPath: /mnt/workdir
+        workingDir: $(workspaces.workdir.path)
+        steps:
+          - name: apply-resources
+            image: bitnami/kubectl:latest
+            script: |
+              #!/bin/bash -e
+
+              dry_run=""
+
+              if [[ $(params.event-type) == "push"]]; then
+                dry_run="--dry-run=server"
+              fi
+
+              kubectl apply "$dry_run" -f $(params.resources-dir)
+    workspaces:
+    - name: workspace
+    - name: git-auth
+      optional: true
+  taskRunTemplate: {}
+  workspaces:
+  - name: workspace
+    volumeClaimTemplate:
+      metadata:
+        creationTimestamp: null
+      spec:
+        accessModes:
+        - ReadWriteOnce
+        resources:
+          requests:
+            storage: 1Gi
+      status: {}
+  #- name: git-auth
+  #  secret:
+  #    secretName: '{{ git_auth_secret }}'
