@@ -25,7 +25,7 @@ spec:
   - name: dockerfile
     value: Dockerfile
   - name: git-url
-    value: https://github.com/konflux-ci/testrepo.git
+    value: https://github.com/ernesgonzalez33/testrepo.git
   - name: output-image
     value: registry-service.kind-registry:5001/test-component:on-pr-{{revision}}
   - name: path-context
