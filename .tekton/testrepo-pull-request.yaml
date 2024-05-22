@@ -27,7 +27,7 @@ spec:
   - name: git-url
     value: '{{source_url}}'
   - name: output-image
-    value: registry-service.kind-registry:5001/test-component:on-pr-{{revision}}
+    value: registry-service.kind-registry/test-component:on-pr-{{revision}}
   - name: path-context
     value: .
   - name: revision
