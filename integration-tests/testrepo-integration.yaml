@@ -41,7 +41,7 @@ spec:
               kubectl delete job --ignore-not-found test-hello -n $NAMESPACE
               kubectl delete pods --ignore-not-found -l job-name=test-hello -n $NAMESPACE
               kubectl create job test-hello -n $NAMESPACE --image=$IMAGE
-              kubectl wait --for=condition=complete job/test-hello
+              kubectl wait --for=condition=complete job/test-hello --timeout=120s
               LOGS=$(kubectl logs -l job-name=test-hello -n $NAMESPACE)
               kubectl delete job --ignore-not-found test-hello -n $NAMESPACE
               echo $LOGS | grep "hello world"
