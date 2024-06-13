@@ -27,7 +27,7 @@ spec:
   - name: git-url
     value: '{{source_url}}'
   - name: output-image
-    value: quay.io/zxiongtest/testrepo1:on-pr-{{revision}}
+    value: quay.io/zxiongtest/testrepo1:on-pr1-{{revision}}
   - name: path-context
     value: .
   - name: revision
