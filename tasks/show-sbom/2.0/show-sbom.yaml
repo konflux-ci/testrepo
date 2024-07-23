@@ -7,7 +7,7 @@ metadata:
     app.kubernetes.io/version: "0.1"
   annotations:
     tekton.dev/pipelines.minVersion: "0.12.1"
-    tekton.dev/tags: "appstudio, hacbs"
+    tekton.dev/tags: "konflux"
 spec:
   description: >-
     Shows the Software Bill of Materials (SBOM) generated for the built image in CyloneDX JSON format.
@@ -20,32 +20,35 @@ spec:
         refers to a multi-arch image and this parameter is empty, the task will default to use "linux/amd64".
       type: string
       default: "linux/amd64"
-    - name: TLSVERIFY
-      description: Verify the TLS on the registry endpoint (for push/pull to a non-TLS registry)
+    - name: caTrustConfigMapName
       type: string
-      default: "true"
+      description: The name of the ConfigMap to read CA bundle data from.
+      default: trusted-ca
+    - name: caTrustConfigMapKey
+      type: string
+      description: The name of the key in the ConfigMap that contains the CA bundle data.
+      default: ca-bundle.crt
   steps:
   - name: show-sbom
     image: quay.io/konflux-ci/appstudio-utils:ab6b0b8e40e440158e7288c73aff1cf83a2cc8a9@sha256:24179f0efd06c65d16868c2d7eb82573cce8e43533de6cea14fec3b7446e0b14
     # per https://kubernetes.io/docs/concepts/containers/images/#imagepullpolicy-defaulting
     # the cluster will set imagePullPolicy to IfNotPresent
-    # also per direction from Ralph Bean, we want to use image digest based tags to use a cue to automation like dependabot or renovatebot to periodially submit pull requests that update the digest as new images are released.
     env:
     - name: IMAGE_URL
       value: $(params.IMAGE_URL)
     - name: PLATFORM
       value: $(params.PLATFORM)
-    - name: TLSVERIFY
-      value: $(params.TLSVERIFY)
     script: |
       #!/bin/bash
 
-      download_sbom_with_retry() {
-        INSECURE=false
-        if [[ "$TLSVERIFY" = "false" ]]; then
-          INSECURE=true
-        fi
+      ca_bundle=/mnt/trusted-ca/ca-bundle.crt
+      if [ -f "$ca_bundle" ]; then
+        echo "INFO: Using mounted CA bundle: $ca_bundle"
+        cp -vf $ca_bundle /etc/pki/ca-trust/source/anchors
+        update-ca-trust
+      fi
 
+      download_sbom_with_retry() {
         status=-1
         max_try=5
         wait_sec=2
@@ -53,10 +56,7 @@ spec:
         PLATFORM_ARG="$1"
         for run in $(seq 1 $max_try); do
           status=0
-          cosign download sbom \
-            --allow-http-registry=$INSECURE \
-            --allow-insecure-registry=$INSECURE \
-            $PLATFORM_ARG $IMAGE_URL 2>>err
+          cosign download sbom $PLATFORM_ARG $IMAGE_URL 2>>err
           status=$?
           if [ "$status" -eq 0 ]; then
             break
@@ -69,7 +69,7 @@ spec:
         fi
       }
 
-      RAW_OUTPUT=$(skopeo inspect --tls-verify=$TLSVERIFY --no-tags --raw docker://${IMAGE_URL})
+      RAW_OUTPUT=$(skopeo inspect --no-tags --raw docker://${IMAGE_URL})
       if [ $(jq -r '.mediaType' <<< $RAW_OUTPUT) == "application/vnd.oci.image.manifest.v1+json" ] ; then
         ARCHES=""
       else
@@ -83,3 +83,15 @@ spec:
       else
         download_sbom_with_retry " --platform=$PLATFORM "
       fi
+    volumeMounts:
+    - name: trusted-ca
+      mountPath: /mnt/trusted-ca
+      readOnly: true
+  volumes:
+  - name: trusted-ca
+    configMap:
+      name: $(params.caTrustConfigMapName)
+      items:
+        - key: $(params.caTrustConfigMapKey)
+          path: ca-bundle.crt
+      optional: true
