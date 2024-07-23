@@ -25,7 +25,7 @@ spec:
   - name: output-image
     value: quay.io/rh-local-test/user-ns2/test-component/test-component:on-pr-{{revision}}
   - name: image-expires-after
-    value: 6h
+    value: 5h
   - name: dockerfile
     value: Dockerfile
   - name: path-context
