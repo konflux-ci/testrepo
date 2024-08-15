@@ -22,7 +22,7 @@ spec:
   - name: git-url
     value: '{{repo_url}}'
   - name: output-image
-    value: <image-repo-url>:{{revision}}
+    value: quay.io/raukadahkonfluxci/user-ns2/testrepo-konflux/testrepo:{{revision}}
   - name: path-context
     value: .
   - name: revision
