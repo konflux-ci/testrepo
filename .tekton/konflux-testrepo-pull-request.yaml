@@ -1,4 +1,4 @@
-apiVersion: tekton.dev/v1
+apiVersion: tekton.dev/v1beta1
 kind: PipelineRun
 metadata:
   annotations:
@@ -173,6 +173,11 @@ spec:
         - name: kind
           value: task
         resolver: bundles
+      podTemplate:
+        sidecars:
+          name: ldoktor-init
+          image: busybox
+          command: ["sh", "-c", "mkdir -p /workspace/output"]
       when:
       - input: $(tasks.init.results.build)
         operator: in
