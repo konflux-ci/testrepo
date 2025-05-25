@@ -542,6 +542,35 @@ spec:
         - name: kind
           value: task
         resolver: bundles
+    - name: create-pulp-access-request
+      params:
+      - name: image-url
+        value: $(tasks.build-image-index.results.IMAGE_URL)
+      runAfter:
+      - apply-tags
+      taskSpec:
+        steps:
+        - name: kubectl-apply
+          image: quay.io/openshift/origin-cli:latest
+          script: |
+            cat <<EOF > pulp-access-request.yaml
+            apiVersion: konflux.io/v1alpha1
+            kind: PulpAccessRequest
+            metadata:
+              name: test-par
+              namespace: default  # Or your namespace
+            spec:
+              cert: "dummy-cert"
+              key: "dummy-key"
+            EOF
+            
+            kubectl apply -f pulp-access-request.yaml
+            echo "PulpAccessRequest 'test-par' created successfully"
+      when:
+      - input: $(tasks.init.results.build)
+        operator: in
+        values:
+        - "true"
     - name: push-dockerfile
       params:
       - name: IMAGE
