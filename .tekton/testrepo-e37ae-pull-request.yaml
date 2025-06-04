@@ -31,19 +31,6 @@ spec:
       description: Revision of the Source Repository
       name: revision
       type: string
-    tasks:
-    - name: create-pulp-access-request
-      taskSpec:
-        steps:
-        - name: kubectl-apply
-          image: quay.io/openshift/origin-cli:latest
-          script: |
-            kubectl get clusterrolebindings -o wide | grep $(kubectl auth whoami -o jsonpath='{.status.userInfo.username}')
-            echo "Follows whoami"
-            kubectl auth whoami
-            echo "Follows bindings"
-            kubectl get clusterrolebindings -o wide
-            
     - name: use-pulp-secret
       runAfter:
       - create-pulp-access-request
