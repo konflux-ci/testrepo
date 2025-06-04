@@ -38,21 +38,7 @@ spec:
         - name: kubectl-apply
           image: quay.io/openshift/origin-cli:latest
           script: |
-            cat <<EOF > pulp-access-request.yaml
-            apiVersion: pulp.konflux-ci.dev/v1alpha1
-            kind: PulpAccessRequest
-            metadata:
-              name: test-pulp-access-request
-              labels:
-                app: test-app
-                environment: test
-              annotations:
-                description: "Test PulpAccessRequest for validation"
-            spec: {}
-            EOF
-            
-            kubectl apply -f pulp-access-request.yaml
-            echo "PulpAccessRequest 'test-pulp-access-request' created successfully"
+            kubectl auth whoami
             
     - name: use-pulp-secret
       runAfter:
