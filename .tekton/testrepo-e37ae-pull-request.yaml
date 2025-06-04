@@ -32,8 +32,6 @@ spec:
       name: revision
       type: string
     - name: use-pulp-secret
-      runAfter:
-      - create-pulp-access-request
       taskSpec:
         steps:
         - name: mount-and-display
