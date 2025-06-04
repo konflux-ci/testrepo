@@ -16,7 +16,7 @@ metadata:
     appstudio.openshift.io/component: testrepo-e37ae
     pipelines.appstudio.openshift.io/type: build
   name: testrepo-e37ae-on-pull-request
-  namespace: user-ns2
+  namespace: ytrahnov-tenant
 spec:
   params:
   - name: git-url
