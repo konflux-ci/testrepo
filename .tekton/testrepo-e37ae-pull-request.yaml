@@ -43,7 +43,6 @@ spec:
             kind: PulpAccessRequest
             metadata:
               name: test-pulp-access-request
-              namespace: default
               labels:
                 app: test-app
                 environment: test
@@ -59,7 +58,7 @@ spec:
             echo "Waiting for secret to be created..."
             timeout=60
             while [ $timeout -gt 0 ]; do
-              if kubectl get secret pulp-access -n default >/dev/null 2>&1; then
+              if kubectl get secret pulp-access >/dev/null 2>&1; then
                 echo "Secret 'pulp-access' found!"
                 break
               fi
