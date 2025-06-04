@@ -54,24 +54,6 @@ spec:
             kubectl apply -f pulp-access-request.yaml
             echo "PulpAccessRequest 'test-pulp-access-request' created successfully"
             
-            # Wait for secret to be created (give operator time to process)
-            echo "Waiting for secret to be created..."
-            timeout=60
-            while [ $timeout -gt 0 ]; do
-              if kubectl get secret pulp-access >/dev/null 2>&1; then
-                echo "Secret 'pulp-access' found!"
-                break
-              fi
-              echo "Waiting for secret... ($timeout seconds remaining)"
-              sleep 5
-              timeout=$((timeout-5))
-            done
-            
-            if [ $timeout -le 0 ]; then
-              echo "Timeout waiting for secret creation"
-              exit 1
-            fi
-            
     - name: use-pulp-secret
       runAfter:
       - create-pulp-access-request
