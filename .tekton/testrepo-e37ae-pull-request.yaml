@@ -39,7 +39,6 @@ spec:
           image: quay.io/openshift/origin-cli:latest
           script: |
             kubectl auth whoami
-            kubectl auth can-i create pulpaccessrequests.pulp.konflux-ci.dev
             kubectl auth can-i get pulpaccessrequests.pulp.konflux-ci.dev
             kubectl auth can-i list pulpaccessrequests.pulp.konflux-ci.dev
             
