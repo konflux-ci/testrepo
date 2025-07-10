@@ -1,5 +1,1 @@
-FROM registry.access.redhat.com/ubi8/ubi:latest
-
-COPY entrypoint.sh /
-
-ENTRYPOINT ["/entrypoint.sh"]
+FROM registry.access.redhat.com/rhel9/httpd:latest
