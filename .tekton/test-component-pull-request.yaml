@@ -15,7 +15,7 @@ metadata:
     appstudio.openshift.io/application: test-component
     appstudio.openshift.io/component: test-component
     pipelines.appstudio.openshift.io/type: build
-  name: test-component-on-pull-request
+  name: test-component-on-pull-request-updated
   namespace: user-ns2
 spec:
   params:
@@ -132,7 +132,7 @@ spec:
         - name: name
           value: init
         - name: bundle
-          value: quay.io/konflux-ci/tekton-catalog/task-init:0.2@sha256:afc8d0af71c24285599120946b29eea2ab56663c5f49c6ca80ba12bf56ef2371
+          value: quay.io/konflux-ci/tekton-catalog/task-init:0.2@sha256:bbf313b09740fb39b3343bc69ee94b2a2c21d16a9304f9b7c111c305558fc346
         - name: kind
           value: task
         resolver: bundles
