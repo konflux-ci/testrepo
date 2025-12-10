@@ -9,3 +9,5 @@ To simplify initial local deployments, the pipelines are configured so that imag
 pushed to a local registry deployed on the cluster.
 
 Consult the [documentation](https://github.com/konflux-ci/konflux-ci?tab=readme-ov-file#konflux-ci) for using external image registries.
+
+testing
