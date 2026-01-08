@@ -26,7 +26,7 @@ spec:
             type: string
         steps:
           - name: test-output
-            image: docker.io/bitnami/kubectl:latest
+            image: quay.io/ongres/kubectl@sha256:4be5050c456a4751fe3d70086c0387d65e8973a176fe965de4eaeeb8643b2e0a
             env:
               - name: SNAPSHOT
                 value: "$(params.SNAPSHOT)"
