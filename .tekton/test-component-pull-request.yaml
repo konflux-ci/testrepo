@@ -24,7 +24,7 @@ spec:
   - name: revision
     value: '{{revision}}'
   - name: output-image
-    value: quay.io/avi_test/user-ns2/test-component:on-pr-{{revision}}
+    value: registry-service.kind-registry/test-component:on-pr-{{revision}}
   - name: image-expires-after
     value: 5d
   - name: dockerfile

@@ -23,7 +23,7 @@ spec:
   - name: revision
     value: '{{revision}}'
   - name: output-image
-    value: quay.io/avi_test/user-ns2/test-component:{{revision}}
+    value: registry-service.kind-registry/test-component:{{revision}}
   - name: dockerfile
     value: Dockerfile
   pipelineSpec:
