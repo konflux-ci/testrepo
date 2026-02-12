@@ -9,7 +9,7 @@ metadata:
     pipelinesascode.tekton.dev/cancel-in-progress: "true"
     pipelinesascode.tekton.dev/max-keep-runs: "3"
     pipelinesascode.tekton.dev/on-cel-expression: event == "pull_request" && target_branch
-      == "base-vdalky"
+      == "base-qbguxi"
   creationTimestamp: null
   labels:
     appstudio.openshift.io/application: konflux-ci-upstream-docker-build-oci-ta
@@ -221,7 +221,7 @@ spec:
         - name: name
           value: buildah-oci-ta
         - name: bundle
-          value: quay.io/konflux-ci/tekton-catalog/task-buildah-oci-ta:0.8@sha256:ba9564699ca5dc84abb1307bda07ecf42058e4a153b3f1d4fd0d2e511d42a44d
+          value: quay.io/konflux-ci/tekton-catalog/task-buildah-oci-ta:0.8@sha256:ddaea0f2515c4dc4fe70d6fb830be27b8e74e57010ef62c39953ef2515e2c768
         - name: kind
           value: task
         resolver: bundles
@@ -247,7 +247,7 @@ spec:
         - name: name
           value: build-image-index
         - name: bundle
-          value: quay.io/konflux-ci/tekton-catalog/task-build-image-index:0.2@sha256:8c422a5380a3d877257003dee153190322af84fe6f4f25e9eee7d8bf61a62577
+          value: quay.io/konflux-ci/tekton-catalog/task-build-image-index:0.2@sha256:8fd2bd1329a833cf1c3c049c0044961d6f5d5bfc954ebf188c19a56852c42600
         - name: kind
           value: task
         resolver: bundles
@@ -560,7 +560,7 @@ spec:
         - name: name
           value: rpms-signature-scan
         - name: bundle
-          value: quay.io/konflux-ci/tekton-catalog/task-rpms-signature-scan:0.2@sha256:a99d8fd4c9027356b18e5d2910cc44dbc2fcb53c384ba34696645d9e7faa9084
+          value: quay.io/konflux-ci/tekton-catalog/task-rpms-signature-scan:0.2@sha256:47b81d6b3d752649eddfbb8b3fd8f6522c4bb07f6d1946f9bc45dae3f92e2c9a
         - name: kind
           value: task
         resolver: bundles
