@@ -26,6 +26,8 @@ spec:
     value: quay.io/ytrahnovkonflux/user-ns2/testrepo-e37ae:{{revision}}
   - name: dockerfile
     value: Dockerfile
+  - name: pulp-repo-name
+    value: releases
   pipelineSpec:
     description: |
       This pipeline is ideal for building container images from a Containerfile while maintaining trust after pipeline customization.
@@ -107,6 +109,10 @@ spec:
       description: Whether to enable privileged mode, should be used only with remote
         VMs
       name: privileged-nested
+      type: string
+    - default: releases
+      description: Pulp Maven repository name to upload artifacts to
+      name: pulp-repo-name
       type: string
     results:
     - description: ""
@@ -266,6 +272,166 @@ spec:
         operator: in
         values:
         - "true"
+    - name: upload-to-pulp
+      params:
+      - name: IMAGE_URL
+        value: $(tasks.build-image-index.results.IMAGE_URL)
+      - name: IMAGE_DIGEST
+        value: $(tasks.build-image-index.results.IMAGE_DIGEST)
+      - name: PULP_REPO_NAME
+        value: $(params.pulp-repo-name)
+      runAfter:
+      - build-image-index
+      taskSpec:
+        params:
+        - name: IMAGE_URL
+          type: string
+        - name: IMAGE_DIGEST
+          type: string
+        - name: PULP_REPO_NAME
+          type: string
+        - name: PULP_CONFIG
+          type: string
+          default: "/etc/pulp/cli.toml"
+        - name: ARTIFACTS_PATH
+          type: string
+          default: "maven-artifacts"
+        results:
+        - name: UPLOAD_COUNT
+          description: Number of artifacts successfully uploaded.
+        volumes:
+        - name: pulp-config
+          secret:
+            secretName: pulp-access
+            optional: true
+        steps:
+        - name: extract-and-upload
+          image: registry.access.redhat.com/ubi9/ubi:latest
+          volumeMounts:
+          - name: pulp-config
+            mountPath: /etc/pulp
+            readOnly: true
+          env:
+          - name: IMAGE_URL
+            value: $(params.IMAGE_URL)
+          - name: IMAGE_DIGEST
+            value: $(params.IMAGE_DIGEST)
+          - name: PULP_CONFIG
+            value: $(params.PULP_CONFIG)
+          - name: PULP_REPO_NAME
+            value: $(params.PULP_REPO_NAME)
+          - name: ARTIFACTS_PATH
+            value: $(params.ARTIFACTS_PATH)
+          script: |
+            #!/usr/bin/env bash
+            set -euo pipefail
+
+            dnf install -y --setopt=install_weak_deps=False skopeo jq && dnf clean all
+
+            if [[ ! -f "${PULP_CONFIG}" ]]; then
+                echo "[ERROR] Pulp config file not found: ${PULP_CONFIG}"
+                exit 1
+            fi
+
+            CLI_SECTION=$(sed -n '/^\[cli\]$/,/^\[/{ /^\[cli\]$/d; /^\[/d; p; }' "$PULP_CONFIG")
+
+            parse_toml() {
+                echo "$CLI_SECTION" \
+                    | grep -E "^$1\s*=" 2>/dev/null \
+                    | head -1 \
+                    | sed 's/^[^=]*=\s*//; s/^"//; s/"$//' \
+                    | tr -d "'\r" \
+                    || true
+            }
+
+            PULP_URL=$(parse_toml base_url)
+            PULP_DOMAIN=$(parse_toml domain)
+            PULP_DOMAIN="${PULP_DOMAIN:-default}"
+            PULP_USER=$(parse_toml username)
+            PULP_PASS=$(parse_toml password)
+            API_ROOT=$(parse_toml api_root)
+            API_ROOT="${API_ROOT:-/api/pulp/}"
+            MAVEN_API_ROOT="${API_ROOT%/}/maven"
+
+            if [[ -z "$PULP_URL" ]]; then
+                echo "[ERROR] base_url not found in ${PULP_CONFIG}"
+                exit 1
+            fi
+
+            CURL_AUTH=()
+            if [[ -n "$PULP_USER" ]] && [[ -n "$PULP_PASS" ]]; then
+                CURL_AUTH+=(-u "${PULP_USER}:${PULP_PASS}")
+            fi
+
+            echo "[INFO] Pulp server: ${PULP_URL}  domain: ${PULP_DOMAIN}"
+            echo "[INFO] Maven API:   ${MAVEN_API_ROOT}"
+            echo "[INFO] Target repository: ${PULP_REPO_NAME}"
+
+            WORKDIR=$(mktemp -d)
+            trap "rm -rf ${WORKDIR}" EXIT
+
+            echo "[INFO] Pulling image ${IMAGE_URL}@${IMAGE_DIGEST} ..."
+            skopeo copy --src-tls-verify=false \
+                "docker://${IMAGE_URL}@${IMAGE_DIGEST}" \
+                "dir:${WORKDIR}/image"
+
+            echo "[INFO] Extracting layers..."
+            mkdir -p "${WORKDIR}/extracted"
+
+            manifest="${WORKDIR}/image/manifest.json"
+            if [[ ! -f "$manifest" ]]; then
+                echo "[ERROR] No manifest.json in pulled image"
+                exit 1
+            fi
+
+            for layer_digest in $(jq -r '.layers[].digest' "$manifest" | sed 's/sha256://'); do
+                layer_file="${WORKDIR}/image/${layer_digest}"
+                if [[ -f "$layer_file" ]]; then
+                    tar xf "$layer_file" -C "${WORKDIR}/extracted/" 2>/dev/null || true
+                fi
+            done
+
+            ARTIFACTS_DIR="${WORKDIR}/extracted/${ARTIFACTS_PATH}"
+            if [[ ! -d "$ARTIFACTS_DIR" ]]; then
+                echo "[WARN] No /${ARTIFACTS_PATH}/ directory in image; skipping upload"
+                echo -n "0" > "$(results.UPLOAD_COUNT.path)"
+                exit 0
+            fi
+
+            if [[ "$PULP_DOMAIN" != "default" ]]; then
+                DEPLOY_BASE="${PULP_URL}${MAVEN_API_ROOT}/${PULP_DOMAIN}/${PULP_REPO_NAME}"
+            else
+                DEPLOY_BASE="${PULP_URL}${MAVEN_API_ROOT}/${PULP_REPO_NAME}"
+            fi
+
+            upload_count=0
+
+            while IFS= read -r filepath; do
+                [[ -f "$filepath" ]] || continue
+                relative_path="${filepath#${ARTIFACTS_DIR}/}"
+                deploy_url="${DEPLOY_BASE}/${relative_path}"
+
+                echo "[INFO] Uploading ${relative_path} ..."
+
+                response=$(curl -s -w "\n%{http_code}" "${CURL_AUTH[@]}" \
+                    -X PUT --data-binary "@${filepath}" \
+                    -H "Content-Type: application/octet-stream" \
+                    "${deploy_url}")
+                http_code=$(echo "$response" | tail -1)
+                body=$(echo "$response" | sed '$d')
+
+                if [[ "$http_code" == "201" ]]; then
+                    echo "  Uploaded successfully"
+                    upload_count=$((upload_count + 1))
+                else
+                    echo "  FAILED (HTTP ${http_code}): ${body}"
+                    exit 1
+                fi
+            done < <(find "${ARTIFACTS_DIR}" -type f | sort)
+
+            echo "[INFO] Uploaded ${upload_count} artifact(s)"
+            echo -n "${upload_count}" > "$(results.UPLOAD_COUNT.path)"
+            echo "[INFO] Done."
     - name: build-source-image
       params:
       - name: BINARY_IMAGE
