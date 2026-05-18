@@ -1,3 +1,6 @@
+# Konflux integration test: runs the built container image as a Kubernetes Job and asserts
+# its logs contain the expected output from entrypoint.sh.
+# Keep this pipeline's assertion in sync with entrypoint.sh.
 apiVersion: tekton.dev/v1
 kind: Pipeline
 metadata:

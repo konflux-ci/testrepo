@@ -1,3 +1,7 @@
+# Konflux build pipeline for pushes to main (Pipelines-as-Code).
+# The mirror workflow (.github/workflows/mirror-to-testrepo.yaml) transforms this file
+# into the public-sample layout under pipelines/ when mirroring to konflux-ci/testrepo.
+# See .github/scripts/mirror/prepare-staging.sh for the full transform chain.
 apiVersion: tekton.dev/v1
 kind: PipelineRun
 metadata:
