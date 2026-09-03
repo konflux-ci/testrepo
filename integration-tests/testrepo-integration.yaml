@@ -1,3 +1,6 @@
+# Konflux integration test: runs the built container image as a Kubernetes Job and asserts
+# its logs contain the expected output from entrypoint.sh.
+# Keep this pipeline's assertion in sync with entrypoint.sh.
 apiVersion: tekton.dev/v1
 kind: Pipeline
 metadata:
@@ -7,14 +10,7 @@ spec:
     - name: SNAPSHOT
       type: string
       description: |
-        For simplicity, we expect a single component inside our snapshot
-          {
-            "components": [
-              {
-                "containerImage": "quay.io/example/repo:latest"
-              }
-            ]
-          }
+        Snapshot JSON with at least one component and containerImage.
   tasks:
     - name: test-hello-world
       params:
@@ -32,16 +28,96 @@ spec:
                 value: "$(params.SNAPSHOT)"
               - name: NAMESPACE
                 value: "$(context.pipelineRun.namespace)"
+              - name: JOB_WAIT_TIMEOUT
+                value: "180s"
             script: |
               #!/usr/bin/bash
-              set -euxo pipefail
+              set -euo pipefail
 
-              IMAGE=$(echo "$SNAPSHOT" | jq -r '.components[0].containerImage')
-              echo "Extracted image: $IMAGE"
-              kubectl delete job --ignore-not-found test-hello -n $NAMESPACE
-              kubectl delete pods --ignore-not-found -l job-name=test-hello -n $NAMESPACE
-              kubectl create job test-hello -n $NAMESPACE --image=$IMAGE
-              kubectl wait --for=condition=complete job/test-hello --timeout=120s
-              LOGS=$(kubectl logs -l job-name=test-hello -n $NAMESPACE)
-              kubectl delete job --ignore-not-found test-hello -n $NAMESPACE
-              echo $LOGS | grep "hello world"
+              JOB_NAME="test-hello"
+              WAIT_SECONDS="${JOB_WAIT_TIMEOUT%s}"
+
+              dump_job_state() {
+                echo "DEBUG: job and pod state in namespace ${NAMESPACE}"
+                kubectl get job "${JOB_NAME}" -n "${NAMESPACE}" -o wide 2>/dev/null || true
+                kubectl get pods -l "job-name=${JOB_NAME}" -n "${NAMESPACE}" -o wide 2>/dev/null || true
+                kubectl describe job "${JOB_NAME}" -n "${NAMESPACE}" 2>/dev/null || true
+                kubectl logs -l "job-name=${JOB_NAME}" -n "${NAMESPACE}" --all-containers=true 2>/dev/null || true
+              }
+
+              cleanup_job() {
+                kubectl delete job --ignore-not-found "${JOB_NAME}" -n "${NAMESPACE}"
+                kubectl delete pods --ignore-not-found -l "job-name=${JOB_NAME}" -n "${NAMESPACE}"
+              }
+
+              on_error() {
+                echo "ERROR: integration test script failed at line ${1}"
+                dump_job_state
+              }
+              trap 'on_error ${LINENO}' ERR
+
+              cleanup_job
+
+              IMAGE="$(echo "${SNAPSHOT}" | jq -r '.components[0].containerImage')"
+              if [[ -z "${IMAGE}" || "${IMAGE}" == "null" ]]; then
+                echo "ERROR: could not extract containerImage from SNAPSHOT"
+                echo "SNAPSHOT=${SNAPSHOT}"
+                exit 1
+              fi
+              echo "Extracted image: ${IMAGE}"
+
+              kubectl create job "${JOB_NAME}" -n "${NAMESPACE}" --image="${IMAGE}"
+
+              SECONDS=0
+              poll=5
+              while (( SECONDS < WAIT_SECONDS )); do
+                if kubectl wait --for=condition=complete "job/${JOB_NAME}" -n "${NAMESPACE}" --timeout=5s 2>/dev/null; then
+                  break
+                fi
+                waiting_reason="$(kubectl get pods -l "job-name=${JOB_NAME}" -n "${NAMESPACE}" \
+                  -o jsonpath='{.items[0].status.containerStatuses[0].state.waiting.reason}' 2>/dev/null || true)"
+                if [[ "${waiting_reason}" == "ImagePullBackOff" || "${waiting_reason}" == "ErrImagePull" ]]; then
+                  echo "ERROR: job pod cannot pull image ${IMAGE} (${waiting_reason})"
+                  dump_job_state
+                  exit 1
+                fi
+                pod_phase="$(kubectl get pods -l "job-name=${JOB_NAME}" -n "${NAMESPACE}" \
+                  -o jsonpath='{.items[0].status.phase}' 2>/dev/null || true)"
+                if [[ "${pod_phase}" == "Failed" ]]; then
+                  echo "ERROR: job pod failed before completion"
+                  dump_job_state
+                  exit 1
+                fi
+                sleep "${poll}"
+              done
+              if ! kubectl get job "${JOB_NAME}" -n "${NAMESPACE}" -o jsonpath='{.status.succeeded}' 2>/dev/null | grep -q 1; then
+                echo "ERROR: job/${JOB_NAME} did not complete within ${WAIT_SECONDS}s"
+                dump_job_state
+                exit 1
+              fi
+
+              LOGS=""
+              for _ in 1 2 3 4 5; do
+                LOGS="$(kubectl logs -l "job-name=${JOB_NAME}" -n "${NAMESPACE}" --all-containers=true 2>/dev/null || true)"
+                if [[ -n "${LOGS}" ]]; then
+                  break
+                fi
+                sleep 2
+              done
+
+              echo "Job logs:"
+              printf '%s\n' "${LOGS}"
+
+              if [[ -z "${LOGS}" ]]; then
+                echo "ERROR: job completed but logs are empty"
+                dump_job_state
+                exit 1
+              fi
+
+              if ! grep -Fq "hello world" <<<"${LOGS}"; then
+                echo "ERROR: expected 'hello world' in job logs"
+                exit 1
+              fi
+
+              cleanup_job
+              echo "SUCCESS: integration test passed"

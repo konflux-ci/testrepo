@@ -1,0 +1,38 @@
+# Delete branches and close PRs older than 1 week (used for CI in konflux-ci/konflux-ci).
+# Keeps the repo from accumulating stale test branches and PRs from Konflux CI Test App.
+#
+# Local dry run (e.g. against konflux-ci/testrepo via upstream remote):
+#   GITHUB_REPOSITORY=konflux-ci/testrepo REMOTE=upstream .github/scripts/cleanup-old-branches.sh --dry-run
+# or write commands to a file:
+#   GITHUB_REPOSITORY=konflux-ci/testrepo REMOTE=upstream .github/scripts/cleanup-old-branches.sh --dry-run dry-run-commands.txt
+# The script fetches from REMOTE first so you see all branches (not just what your clone had).
+# Requires: gh auth, and a remote (e.g. upstream) pointing at the repo.
+name: Delete old branches
+
+on:
+  schedule:
+    - cron: '0 2 * * *' # Daily at 02:00 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: write      # To delete branches
+  pull-requests: write # To close PRs
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # Required to see branch commit dates
+
+      - name: Close old PRs and delete old branches
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GITHUB_TOKEN: ${{ github.token }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          PR_AUTHOR: "konflux-ci-test-app[bot]"
+          EXCLUDED_BRANCHES: "main|master|integration-tests"
+          CUTOFF_DAYS: 7
+        run: bash .github/scripts/cleanup-old-branches.sh
