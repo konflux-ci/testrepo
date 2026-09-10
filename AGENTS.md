@@ -27,6 +27,21 @@ overwritten on each mirror run.
 - Container build: `docker build -t testrepo-updater .`
 - Container run: `docker run --rm testrepo-updater`
 
+## Single-file verification
+
+After a small shell change, syntax-check and lint the **script you edited**
+(not the full image build).
+
+1. Run `bash -n <script>` (no extra tools required).
+2. If `shellcheck` is on PATH, run `shellcheck <script>`.
+
+Example (replace with the script you changed):
+
+```bash
+bash -n entrypoint.sh
+shellcheck entrypoint.sh
+```
+
 ## Verifying Changes
 
 ```bash
