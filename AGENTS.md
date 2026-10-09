@@ -64,3 +64,7 @@ output string.
 the mirror. Change `.tekton/` and adjust the mirror scripts in
 `.github/scripts/mirror/` if needed.
 
+
+## Fullsend retro
+
+When writing retro output (PR close or `/fs-retro`), read `skills/retro-filing-policy/SKILL.md`. Keep `proposals` empty unless the human comment explicitly says to file issues.
