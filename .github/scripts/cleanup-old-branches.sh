@@ -34,7 +34,9 @@ while [ $# -gt 0 ]; do
 done
 
 dry_run_write() {
-  local line="$1"
+  local line
+  line=$(printf '%q ' "$@")
+  line=${line% }
   if [ -n "$DRY_RUN" ]; then
     if [ -n "$DRY_RUN_FILE" ]; then
       echo "$line" >> "$DRY_RUN_FILE"
@@ -45,12 +47,12 @@ dry_run_write() {
 }
 
 run_or_echo() {
-  # run_or_echo "gh pr close 123 --repo owner/repo --delete-branch"
-  local cmd="$1"
+  # Pass commands as argv, never as shell source. This keeps branch names and
+  # other external values as data even when they contain shell metacharacters.
   if [ -n "$DRY_RUN" ]; then
-    dry_run_write "$cmd"
+    dry_run_write "$@"
   else
-    eval "$cmd" || true
+    "$@" || true
   fi
 }
 
@@ -74,7 +76,7 @@ if [ -z "$GITHUB_REPOSITORY" ]; then
 fi
 
 REPO="$GITHUB_REPOSITORY"
-DATE_LIMIT=$(date -d "-$CUTOFF_DAYS days" +%Y-%m-%d 2>/dev/null || date -v-${CUTOFF_DAYS}d +%Y-%m-%d)
+DATE_LIMIT=$(date -d "-${CUTOFF_DAYS} days" +%Y-%m-%d 2>/dev/null || date -v-"${CUTOFF_DAYS}"d +%Y-%m-%d)
 
 if [ -n "$DRY_RUN" ]; then
   echo "DRY RUN: destructive commands will be echoed only (no PRs closed, no branches deleted)" >&2
@@ -102,7 +104,7 @@ else
   while read -r pr_number; do
     [ -z "$pr_number" ] && continue
     echo "Would close PR #$pr_number" >&2
-    run_or_echo "gh pr close $pr_number --repo $REPO --delete-branch"
+    run_or_echo gh pr close "$pr_number" --repo "$REPO" --delete-branch
   done <<< "$pr_numbers"
 fi
 
@@ -128,14 +130,14 @@ fi
 
 echo "Identifying stale branches (refs/remotes/$REMOTE/)..." >&2
 
-branches_to_delete=""
+branches_to_delete=()
 count=0
 batch_size=30
 
 # Use tab between date and ref so "date" with timezone (e.g. 12:59:09 +0300) doesn't split
 while IFS=$'\t' read -r date branch; do
   [ -z "$branch" ] && continue
-  branch_name=${branch#$REMOTE/}
+  branch_name=${branch#"$REMOTE"/}
 
   if echo "$branch_name" | grep -qE "^(${EXCLUDED_BRANCHES})$"; then
     continue
@@ -147,23 +149,20 @@ while IFS=$'\t' read -r date branch; do
 
   if [ "$age_days" -ge "$CUTOFF_DAYS" ]; then
     echo "Would delete branch: $branch_name ($age_days days old)" >&2
-    branches_to_delete="$branches_to_delete $branch_name"
+    branches_to_delete+=("$branch_name")
     count=$((count + 1))
   fi
 
   if [ "$count" -ge "$batch_size" ]; then
-    # Trim leading space and run one push per batch
-    branches_trimmed="${branches_to_delete# }"
-    run_or_echo "git push $REMOTE --delete $branches_trimmed"
-    branches_to_delete=""
+    run_or_echo git push "$REMOTE" --delete -- "${branches_to_delete[@]}"
+    branches_to_delete=()
     count=0
   fi
-done < <(git for-each-ref --sort=committerdate refs/remotes/$REMOTE/ --format=$'%(committerdate:iso8601)\t%(refname:short)')
+done < <(git for-each-ref --sort=committerdate "refs/remotes/$REMOTE/" --format=$'%(committerdate:iso8601)\t%(refname:short)')
 
 # Final batch
-if [ -n "$branches_to_delete" ]; then
-  branches_trimmed="${branches_to_delete# }"
-  run_or_echo "git push $REMOTE --delete $branches_trimmed"
+if [ "${#branches_to_delete[@]}" -gt 0 ]; then
+  run_or_echo git push "$REMOTE" --delete -- "${branches_to_delete[@]}"
 fi
 
 if [ -n "$DRY_RUN_FILE" ]; then
